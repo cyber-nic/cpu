@@ -1,12 +1,14 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/logrusorgru/aurora"
 	"github.com/shirou/gopsutil/cpu"
 )
 
@@ -19,8 +21,33 @@ type CPUInfo struct {
 }
 
 func main() {
-	cpu := getCPUInfo()
-	drawCPU(cpu)
+	// Define the watch flag
+	watch := flag.Bool("watch", false, "Refresh the CPU state every 5 seconds")
+	refreshRate := flag.Int("rate", 2, "Refresh rate in seconds (1-10)")
+	flag.Parse()
+
+	// Validate refresh rate
+	if *refreshRate < 1 || *refreshRate > 10 {
+		log.Fatalf("Invalid refresh rate: %d. Please provide a value between 1 and 10 seconds.", *refreshRate)
+	}
+
+	// Run in watch mode if the flag is set
+	if *watch {
+		for {
+			cpu := getCPUInfo()
+			clearConsole()
+			drawCPU(cpu)
+			time.Sleep(time.Duration(*refreshRate) * time.Second)
+		}
+	} else {
+		// Run once if not in watch mode
+		cpu := getCPUInfo()
+		drawCPU(cpu)
+	}
+}
+
+func clearConsole() {
+	fmt.Print("\033[H\033[2J")
 }
 
 func getCPUInfo() CPUInfo {
@@ -172,8 +199,21 @@ func createThreadBox(threadNum, width int, usage float64) []string {
 		barWidth = width - 2
 	}
 
+	// Determine color based on usage
+	var coloredBar string
+	switch {
+	case usage <= 25:
+		coloredBar = aurora.Green(strings.Repeat("█", barWidth)).String()
+	case usage <= 50:
+		coloredBar = aurora.Yellow(strings.Repeat("█", barWidth)).String()
+	case usage <= 75:
+		coloredBar = aurora.BrightRed(strings.Repeat("█", barWidth)).String() // Bright Red resembles orange
+	default:
+		coloredBar = aurora.Red(strings.Repeat("█", barWidth)).String()
+	}
+
 	// Thread content
-	box = append(box, fmt.Sprintf("│%s%s│", strings.Repeat("█", barWidth), strings.Repeat(" ", width-2-barWidth)))
+	box = append(box, fmt.Sprintf("│%s%s│", coloredBar, strings.Repeat(" ", width-2-barWidth)))
 
 	// Thread bottom
 	box = append(box, fmt.Sprintf("└%s┘", strings.Repeat("─", width-2)))
