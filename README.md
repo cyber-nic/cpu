@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./cpu.png" alt="CLI Unit Test Generator Logo" />
+</p>
+
 # CPU Visualization Tool
 
 This tool provides a real-time visualization of CPU cores and threads usage in the terminal. It is built using Go and utilizes the `shirou/gopsutil` library to fetch CPU information. The display is refreshed dynamically to show updated CPU usage.
