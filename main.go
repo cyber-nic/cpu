@@ -5,6 +5,7 @@ import (
 	"log"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/shirou/gopsutil/cpu"
 )
@@ -14,6 +15,7 @@ type CPUInfo struct {
 	speed          float64
 	cores          int
 	threadsPerCore int
+	usage          []float64
 }
 
 func main() {
@@ -26,6 +28,17 @@ func getCPUInfo() CPUInfo {
 	if err != nil || len(cpuInfo) == 0 {
 		log.Fatalf("Failed to fetch CPU info: %v", err)
 	}
+
+	// Get CPU usage percentages for each logical CPU
+	usage, err := cpu.Percent(1*time.Second, true)
+	if err != nil {
+		log.Fatalf("Error fetching CPU percentages: %v", err)
+	}
+
+	// for i, p := range percentages {
+	// 	fmt.Printf("Logical CPU %d: %.2f%%\n", i, p)
+	// }
+	// fmt.Println("---")
 
 	// Logical CPU count
 	logicalCPUs := runtime.NumCPU()
@@ -48,6 +61,7 @@ func getCPUInfo() CPUInfo {
 		speed:          cpuInfo[0].Mhz,
 		cores:          physicalCores,
 		threadsPerCore: threadsPerCore,
+		usage:          usage,
 	}
 }
 
@@ -60,9 +74,9 @@ func min(a, b int) int {
 
 func drawCPU(cpu CPUInfo) {
 	// Constants for sizing
-	cpuWidth := 49
-	coreWidth := 22
-	threadWidth := 16
+	cpuWidth := 61
+	coreWidth := 28
+	threadWidth := 24
 
 	// Create CPU outer box
 	fmt.Println(strings.Repeat(" ", (cpuWidth-cpuWidth)/2) + "┌" + strings.Repeat("─", cpuWidth-2) + "┐")
@@ -73,21 +87,21 @@ func drawCPU(cpu CPUInfo) {
 	rows := (cpu.cores + 1) / 2 // Calculate rows required (2 cores per row)
 	for row := 0; row < rows; row++ {
 		coresInRow := min(cpu.cores-row*2, 2) // Handle remaining cores
-		drawCoreRow(row, coresInRow, cpu.threadsPerCore, coreWidth, threadWidth, cpuWidth)
+		drawCoreRow(row, coresInRow, cpu.threadsPerCore, coreWidth, threadWidth, cpuWidth, cpu.usage)
 	}
 
 	// Close CPU box
 	fmt.Println(strings.Repeat(" ", (cpuWidth-cpuWidth)/2) + "└" + strings.Repeat("─", cpuWidth-2) + "┘")
 }
 
-func drawCoreRow(row, numCores, threadsPerCore, coreWidth, threadWidth, cpuWidth int) {
+func drawCoreRow(row, numCores, threadsPerCore, coreWidth, threadWidth, cpuWidth int, usage []float64) {
 	coreBoxes := make([][]string, numCores)
 	maxHeight := 0
 
 	// Generate core boxes
 	for i := 0; i < numCores; i++ {
 		coreNum := row*2 + i
-		coreBoxes[i] = createCoreBox(coreNum, threadsPerCore, coreWidth, threadWidth)
+		coreBoxes[i] = createCoreBox(coreNum, threadsPerCore, coreWidth, threadWidth, usage)
 		if len(coreBoxes[i]) > maxHeight {
 			maxHeight = len(coreBoxes[i])
 		}
@@ -116,7 +130,7 @@ func drawCoreRow(row, numCores, threadsPerCore, coreWidth, threadWidth, cpuWidth
 	}
 }
 
-func createCoreBox(coreNum, threadsPerCore, width, threadWidth int) []string {
+func createCoreBox(coreNum, threadsPerCore, width, threadWidth int, usage []float64) []string {
 	var box []string
 
 	// Core top
@@ -126,7 +140,7 @@ func createCoreBox(coreNum, threadsPerCore, width, threadWidth int) []string {
 	// For each thread in the core
 	for t := 0; t < threadsPerCore; t++ {
 		threadNum := coreNum*threadsPerCore + t
-		threadBox := createThreadBox(threadNum, threadWidth)
+		threadBox := createThreadBox(threadNum, threadWidth, usage[threadNum])
 
 		// Add padding to thread box
 		paddedThreadBox := make([]string, len(threadBox))
@@ -143,15 +157,23 @@ func createCoreBox(coreNum, threadsPerCore, width, threadWidth int) []string {
 	return box
 }
 
-func createThreadBox(threadNum, width int) []string {
+func createThreadBox(threadNum, width int, usage float64) []string {
 	var box []string
 
 	// Thread top
 	box = append(box, fmt.Sprintf("┌%s┐", strings.Repeat("─", width-2)))
 	box = append(box, fmt.Sprintf("│%s│", centerText(fmt.Sprintf("Thread %d", threadNum), width-2)))
 
+	// Calculate bar width based on usage
+	barWidth := int((usage / 100) * float64(width-2))
+	if barWidth < 1 {
+		barWidth = 1
+	} else if barWidth > width-2 {
+		barWidth = width - 2
+	}
+
 	// Thread content
-	box = append(box, fmt.Sprintf("│%s│", strings.Repeat("█", width-2)))
+	box = append(box, fmt.Sprintf("│%s%s│", strings.Repeat("█", barWidth), strings.Repeat(" ", width-2-barWidth)))
 
 	// Thread bottom
 	box = append(box, fmt.Sprintf("└%s┘", strings.Repeat("─", width-2)))
