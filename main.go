@@ -20,6 +20,21 @@ type CPUInfo struct {
 	usage          []float64
 }
 
+type CPUProvider interface {
+	Info() ([]cpu.InfoStat, error)
+	Percent(interval time.Duration, percpu bool) ([]float64, error)
+}
+
+type RealCPUProvider struct{}
+
+func (r *RealCPUProvider) Info() ([]cpu.InfoStat, error) {
+	return cpu.Info()
+}
+
+func (r *RealCPUProvider) Percent(interval time.Duration, percpu bool) ([]float64, error) {
+	return cpu.Percent(interval, percpu)
+}
+
 func main() {
 	// Define the watch flag
 	watch := flag.Bool("watch", false, "Refresh the CPU state every 5 seconds")
@@ -31,17 +46,19 @@ func main() {
 		log.Fatalf("Invalid refresh rate: %d. Please provide a value between 1 and 10 seconds.", *refreshRate)
 	}
 
+	realcpu := &RealCPUProvider{}
+
 	// Run in watch mode if the flag is set
 	if *watch {
 		for {
-			cpu := getCPUInfo()
+			cpu := getCPUInfo(realcpu)
 			clearConsole()
 			drawCPU(cpu)
 			time.Sleep(time.Duration(*refreshRate) * time.Second)
 		}
 	} else {
 		// Run once if not in watch mode
-		cpu := getCPUInfo()
+		cpu := getCPUInfo(realcpu)
 		drawCPU(cpu)
 	}
 }
@@ -50,22 +67,17 @@ func clearConsole() {
 	fmt.Print("\033[H\033[2J")
 }
 
-func getCPUInfo() CPUInfo {
-	cpuInfo, err := cpu.Info()
+func getCPUInfo(provider CPUProvider) CPUInfo {
+	cpuInfo, err := provider.Info()
 	if err != nil || len(cpuInfo) == 0 {
 		log.Fatalf("Failed to fetch CPU info: %v", err)
 	}
 
 	// Get CPU usage percentages for each logical CPU
-	usage, err := cpu.Percent(1*time.Second, true)
+	usage, err := provider.Percent(1*time.Second, true)
 	if err != nil {
 		log.Fatalf("Error fetching CPU percentages: %v", err)
 	}
-
-	// for i, p := range percentages {
-	// 	fmt.Printf("Logical CPU %d: %.2f%%\n", i, p)
-	// }
-	// fmt.Println("---")
 
 	// Logical CPU count
 	logicalCPUs := runtime.NumCPU()
