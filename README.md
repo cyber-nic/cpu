@@ -18,6 +18,12 @@ This tool provides a real-time visualization of CPU cores and threads usage in t
 
 ## Installation
 
+```
+go install github.com/cyber-nic/cpu@latest
+```
+
+## Development
+
 1. Clone the repository:
 
    ```bash
